@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 @author: M. Dadighat
+
+This is an experiment in using a genetic algorithm (or something loosely resembling one) that I 
+tried after reading this paper: https://arxiv.org/abs/1002.0108. With more targets
+than time in the night, and usually nothing time sensitive, I wanted to try to find 
+the optimum schedule that allowed me to image the most targets from my list 
+without favoring any. Ultimately I think this would be better for a larger list of targets
+than what I had, but it was compute/time intensive and would need further optimization to be
+useful on a nightly basis. Finding a good way to mutate the schedules was also a bit of a 
+practical challenge, but it is a fun experiment.
 """
 
 import pandas as pd
@@ -38,7 +47,7 @@ observatory = Observer(longitude=observatory_long*u.deg,
 overhead_per_target = 60  # in seconds
 focus_delta = TimeDelta(180.0, format='sec')  # auto-focus time
 observing_delta = TimeDelta(600.0, format='sec')
-plan_date = Time(["2018-02-09"])
+plan_date = Time(["2022-02-09"])
 db_file_name = "targets.db"
 acp_plan_header = "#CHILL -20.0\n#AUTOFOCUS\n\n"
 
@@ -48,9 +57,7 @@ minimum_moon_sep = 20  # in degrees
 
 
 # =============================================================================
-#
 # Utility functions
-#
 # =============================================================================
 def getAstronomicalTwilightEvening(observatory, date):
     """ getAstronomicalTwilightEvening
@@ -61,7 +68,7 @@ def getAstronomicalTwilightEvening(observatory, date):
     """
     astronomicalTwilight = observatory.twilight_evening_astronomical(
         date, which="next")
-    atFormatted = Time(astronomicalTwilight, out_subfmt='date_hm')
+    atFormatted = Time(astronomicalTwilight, format='iso', out_subfmt='date_hm')
     return atFormatted
 
 
@@ -74,7 +81,7 @@ def getAstronomicalTwilightMorning(observatory, date):
     """
     astronomicalTwilight = observatory.twilight_morning_astronomical(
         date, which="next")
-    atFormatted = Time(astronomicalTwilight, out_subfmt='date_hm')
+    atFormatted = Time(astronomicalTwilight, format='iso', out_subfmt='date_hm')
     return atFormatted
 
 
@@ -99,9 +106,7 @@ def get_normalized_airmass(airmass):
     return normalized_airmass
 
 # =============================================================================
-#
 # Fitness function
-#
 # =============================================================================
 
 
@@ -140,6 +145,8 @@ def evaluate_fitness(observing_schedule, total_time, total_targets):
     time_weighting = .50
     count_weighting = .40
     airmass_weighting = .10
+
+    #TBD
     moon_distance_weighting = 0
 
     # Scores will be out of 100 for each part individually
@@ -175,7 +182,7 @@ def evaluate_fitness(observing_schedule, total_time, total_targets):
                      float(len(observing_schedule.index))) * 100
     print('Average airmass score: ' + str(airmass_score))
 
-    # Moon distance score
+    # Moon distance score TBD
     moon_distance_score = 0
 
     fitness_score = (time_weighting * time_score
@@ -186,12 +193,8 @@ def evaluate_fitness(observing_schedule, total_time, total_targets):
     return fitness_score
 
 # =============================================================================
-#
 # Split
-#
 # =============================================================================
-
-
 def split_schedule(schedule):
     number_of_targets = len(schedule.index)
     head_index = ceil(number_of_targets / 2.0)
@@ -199,17 +202,12 @@ def split_schedule(schedule):
 
     head = schedule.head(head_index)
     tail = schedule.tail(tail_index)
-#    print('Head row count: ' + str(len(head.index)))
-#    print(head)
-#    print('Tail row count: ' + str(len(tail.index)))
-#    print(tail)
+
     return (head, tail)
 
 
 # =============================================================================
-#
 # Refresh
-#
 # =============================================================================
 def refresh_schedule(schedule):
     constraints = [AirmassConstraint(maximum_airmass),
@@ -222,6 +220,7 @@ def refresh_schedule(schedule):
     observing_slot_end = observing_slot_beginning + observing_delta
     observing_slot = Time([observing_slot_beginning, observing_slot_end],
                           out_subfmt='date_hm')
+    print(schedule)
     observable_at_new_spot = is_observable(constraints, observatory,
                                            schedule['coord'].tolist(),
                                            time_range=observing_slot)
@@ -237,24 +236,20 @@ def refresh_schedule(schedule):
 
 
 # =============================================================================
-#
 # Mutate
-#
 # =============================================================================
 def mutate(schedule_to_mutate):
     """ mutate
-
+    TODO 
     """
-    print('Mutating...')
+    #print('Mutating...')
     # find the last item in the list
     #full_targets = data_frame.copy(deep=True)
     return False
 
 
 # =============================================================================
-#
 # Reproduce
-#
 # =============================================================================
 def reproduce(parents, total_time, total_targets):
     """ reproduce
@@ -282,35 +277,23 @@ def reproduce(parents, total_time, total_targets):
         parent_A_head = parent_A[0]
         parent_B_head = parent_B[0]
 
-#        print('Parent A head:')
-#        print(parent_A_head)
-#        print('Parent B head:')
-#        print(parent_B_head)
-
         parent_A_tail = parent_A[1]
-#        print('Parent A tail:')
-#        print(parent_A_tail)
         parent_B_tail = parent_B[1]
-#        print('Parent B tail:')
-#        print(parent_B_tail)
 
         child_C = pd.concat([parent_A_head, parent_B_tail]
-                            ).drop_duplicates().reset_index(drop=True)
-        #parent_A_head.append(parent_B_tail, ignore_index=True)
-#        child_C.reset_index(inplace=True, drop=True)
+                            ).reset_index(drop=True)
+        child_C.reset_index(inplace=True, drop=True)
         child_D = parent_B_head.append(parent_A_tail, ignore_index=True)
         child_D.reset_index(inplace=True, drop=True)
 
-        child_C = mutate(child_C)
-        child_D = mutate(child_D)
+        
+        print(child_C)
+        print(child_D)
+        #child_C = mutate(child_C)
+        #child_D = mutate(child_D)
 
         child_C = refresh_schedule(child_C)
         child_D = refresh_schedule(child_D)
-
-#        print('Child C:')
-#        print(child_C)
-
-       # print(child_D)
 
         child_C = (child_C, evaluate_fitness(child_C, total_time,
                    total_targets))
@@ -322,9 +305,7 @@ def reproduce(parents, total_time, total_targets):
 
 
 # =============================================================================
-#
-# Get data
-#
+# Get target data
 # =============================================================================
 def get_all_targets():
     """ getAllTargets
@@ -362,7 +343,7 @@ def get_all_targets():
         + overhead_per_target
 
         # Clean up dec string to make it compatible with SkyCoord constructor
-        target_df_fixed['dec'] = target_df_fixed['dec'].str.replace(r'(\W\d\d)\s',
+        target_df_fixed['dec'] = target_df_fixed['dec'].str.replace(r'(\W\d\d)\s', 
                                                                     '\\1d ')
         target_df_fixed['dec'] = target_df_fixed['dec'].str.replace("'", 'm')
         target_df_fixed['dec'] = target_df_fixed['dec'].str.replace('"', 's')
@@ -380,9 +361,7 @@ def get_all_targets():
 
 
 # =============================================================================
-#
 # Create schedule
-#
 # =============================================================================
 def create_schedule(target_list, start_time, end_time):
     """ create_schedule
@@ -561,7 +540,7 @@ if __name__ == '__main__':
     for i in range(0, initial_population_size):
         #schedule = create_schedule(data_frame, start_time, end_time)
         # schedule_population.append(schedule)
-        print(i)
+        #print(i)
         pool.apply_async(create_schedule, (data_frame, start_time, end_time,),
                          callback=results.append)
     for r in results:
@@ -589,29 +568,30 @@ if __name__ == '__main__':
     print("%f seconds to calculate schedules" % (time.time() - timer_start))
 
     maximum_fitness = 70
+
+    print("testing - " + str(len(population)))
     generation_maximum = max(population, key=itemgetter(1))[1]
     winner = max(population, key=itemgetter(1))[0]  # 0
     print(generation_maximum)
-#    while generation_maximum < 70:
-#
-#        # 3. Reproduce and mutate
-#        current_generation = population
-#        current_generation.sort(key=itemgetter(1))
-#        #print(current_generation)
-#        current_generation = current_generation[:3]
-#        for i in range(0, 1):
-#            bonus_schedule = create_schedule(data_frame, start_time, end_time)
-#            bonus_fitness = evaluate_fitness(bonus_schedule, total_night_time,
-#                                        total_target_count)
-#            current_generation.append((bonus_schedule, bonus_fitness))
-#        next_generation = reproduce(current_generation, total_night_time,
-#                                    total_target_count)
-#
-#        # 4. Evaluate
-#        generation_maximum = max(next_generation, key=itemgetter(1))[1]
-#        winner = max(next_generation, key=itemgetter(1))[0]
-#        # 5. Next generation if needed
-#
+
+    while generation_maximum < 70:
+       # 3. Reproduce and mutate(not a true mutation, but a random addition to the current generation)
+        current_generation = population
+        current_generation.sort(key=itemgetter(1))
+        #print(current_generation)
+        current_generation = current_generation[:3]
+        for i in range(0, 1):
+            bonus_schedule = create_schedule(data_frame, start_time, end_time)
+            bonus_fitness = evaluate_fitness(bonus_schedule, total_night_time,
+                                        total_target_count)
+            current_generation.append((bonus_schedule, bonus_fitness))
+        next_generation = reproduce(current_generation, total_night_time,
+                                    total_target_count)
+
+        # 4. Evaluate
+        generation_maximum = max(next_generation, key=itemgetter(1))[1]
+        winner = max(next_generation, key=itemgetter(1))[0]
+        # 5. Next generation if needed
 
     print(winner)
     print_acp_plan(winner)
